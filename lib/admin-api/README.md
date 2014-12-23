@@ -1,275 +1,68 @@
 # Koast Admin API
 
-So you want an admin API, huh kid?
+##So you want an admin API, huh kid?
 
+The Koast admin API is a configurable Koast module that can be used to control a
+running Koast instance. It is possible to configure it to administer a remote
+Koast instance (i.e not the one on which it is being hosted) by passing in the
+appropriate configuration parameters. Since the API is exposed as a simple Koast
+module it is also possible to have a single Koast instance host the admin console
+for multiple Koast servers.
 
 ## Setting up an admin API
 
-The koast admin API is a series of utility functions that one can
-use to generate an HTTP API for controlling certain functionality
-in a Koast application.
-
-
-#### Create a koast module
-
-Our admin API is just another koast module. You just have to obtain
-a router with a `GET /discovery` route for the admin clients.
+The admin-api module exposes a function which consumes a configuration object
+and returns a promise which resolves to the admin API Koast module.  This module
+can then be used like any other koast module.
 
 ```javascript
-exports = module.exports = {
-  defaults: {
-    authorization: function(req,res) {
-      return true;
-    }
-  },
+var adminAPI = require('koast');
 
-  router: router
-};
-```
-
-#### Get the Admin API router
-
-You can obtain a router with discoverable routes by calling
-`koast.admin.getRouter()` and passing in a configuration function.
-
-```javascript
-// TODO EXPORT KOAST.ADMIN
-var koast = require('koast');
-var routerPromise = koast.admin.getRouter(configurationFunction);
-```
-
-#### The Configuration Function
-
-The configuration function takes one paramater, `register`, and
-**must** return a promise that resolves upon completion.
-
-
-_TODO ensure that app-maker.js waits for promise_
-
-
-This is where the magic happens. The reasoning behind having the
-configuration file, is so that you can **register** handlers to be
-discoverable by the client.
-
-Here is an example of a configuration function:
-
-```javascript
-var express = require('express');
-
-var configurationFunction = function(register) {
-
-  //
-  // routers typically obtained from convenience functions
-  //
-  var router = express.Router();
-  router.get('/:id', function() {});
-  router.post('/', function() {});
-
-  register({
-    router: router,
-    type: 'backup',
-    name: 's3backup',
-    mount: '/apimodule'
+exports.KoastModule = 
+  adminAPI.genAPIModule({
+    /* Configuration Parameters */
   });
-
-  var d = q.defer();
-  d.resolve();
-  return d.promise;
-};
 ```
-
-#### Registration function
-
-This is how you register a function to be **discoverable**.
-Your admin API router should contain a `GET /discovery` endpoint.
-
-The registration function takes a single configuration object as a
-parameter. The object must contain the following properties:
-
-```
-{
-  router: r, // The routes!
-
-  type:   t, // Admin API module type
-             // Could be one of:
-             // - backup
-             // - restore
-             // - TODO
-             // - THINK OF MORE API MODULE IDEAS
-
-  name: n,   // Display name
-
-  mount: m,  // Base path
-             // defaults to '/'
-
-}
-```
-
-
-### `GET /discovery`
-
-Making a GET request to this URL should yield a map of named modules
-to their respective metadata.
-
-
-The metadata will include the type of API module associated with that name.
-**THIS IS HOW YOU WILL DIFFERENTIATE BETWEEN UIs IN THE ADMIN APP**
-It will also contain an array of paths and methods.
-
-
-Example:
-
-```
-moduleName: {
-  type: 'moduleType'
-  paths: [{
-    path: '/path',
-    methods: {put: true, post: true}
-  }, ...]
-}
-```
-
-
-# A more complete example
-
-## Setup koast module
+##Configuration Parameters
 
 ```javascript
-var koast = require('koast');
-
-// Ideally these should come from a config file
-var access = process.env.AWS_ACCESS;
-var secret = process.env.AWS_SECRET;
-var bucket = process.env.AWS_S3_BUCKET;
-
-function setupS3() {
-  //
-  // Configure an S3 backup router
-  //
-  var collections = ['collections', 'go', 'here'];
-  var mongoUri = 'mongodb://localhost:27017/dumptestdb';
-  var aws = {
-    global: {
-      accessKeyId: access,
-      secretAccessKey: secret
-    },
-
-    s3: { bucket: bucket }
-  }
-
-  // Get the s3 router
-  // TODO FIX THIS EXAMPLE
-  // FIXME EXPORT getS3BackupRouter
-  return koast.admin.getS3BackupRouter('/s3', collections, mongoUri, aws);
-}
-
-
-function configureApi(register) {
-
-  var s3router = setupS3();
-  register({
-    router: s3router,
-    type: 'backup',
-    name: 'S3 Backup',
-    mount: '/backup'
-  });
-
-
-  // make a promise and resolve it.
-  var deferred = q.defer();
-  deferred.resolve();
-  return deferred.promise;
-}
-
-
-var routerPromise = koast.admin.getRouter(configureApi);
-
-exports = module.exports = {
-  defaults: {
-    authorization: function(req,res) {
-      return true;
-    }
+var adminConfig = {
+  aws: {
+    key: process.env.AWS_KEY,
+    secret: process.env.AWS_SECRET
   },
-
-  router: routerPromise
-};
-```
-
-## Consuming this API
-
-Assume that this koast module is mounted to `/admin/api`
-
-```
-GET /admin/api/discovery
-
-// response:
-{
-  s3backup: {
-    type: 'backup',
-    paths: [
-      { path: '/backup/s3/:id', methods: { get: true } },
-      { path: '/backup/s3', methods: { post: true } }
-    ]
-  }
-}
-```
-
-We know that we have a backup module with these routes available:
-
-```
-GET  /admin/api/backup/s3/:id
-POST /admin/api/backup/s3/:id
-```
-
-**TODO explain different module types? The following instructions are
-specific to type `backup`**
-
-```
-POST /admin/api/backup/s3
-
-// No data sent from client
-
-// response:
-{
-  finished: false,
-  id: 'a3954ef0-79aa-11e4-b129-4b5fcf1201a6',
-  start: 1417473452383
-}
-```
-
-When the backup is done, the response will look like this instead:
   
-```
-GET /admin/api/backup/s3/a3954ef0-79aa-11e4-b129-4b5fcf1201a6
+  backups: {
+    target: 'mongodb://localhost:27017/koast_db', //Database to backup
+  }
 
-// No data sent from client
+  database: { //Database used to store admin metadata
+    url: 'mongodb://localhost:27017/koast_admin_db'
+  }
+};
+``` 
 
-// response:
+## Moving forward
+
+The route exposed by the admin API module contains a /discovery path. The
+payload of this path is an object which should be used to derive the paths of
+any documented 'methods'. Its structure is as follows
+
 {
-  id: 'a3954ef0-79aa-11e4-b129-4b5fcf1201a6',
-  finished: true,
-  success: true, 
-  url: [ //only present when success is true
-    'url',
-    'for',
-    'each',
-    'collection' //this can change
-  ],
-  start: 1417473452383,
-  end: 1417480000000,
+  module1: {
+    method1: { "GET": "/path/to/module1_method1", "POST": "/path/to/module1_method1" },
+    method2: { "GET": "/path/to/module1_method2" }
+    .
+    .
+  }
+
+  module2: {
+    method1: { "GET": "/path/to/module2_method1", "POST": "/path/to/module2_method1" },
+    method2: { "GET": "/path/to/module2_method2" }
+    .
+    .
+  }
+  .
+  .
+  .
 }
-```
-
-# API Documentation
-
-####`koast.admin.getRouter(confFunc)`
-
-Get a router for the APIs registered in confFunc.
-
-
-####`koast.admin.getS3BackupRouter(path, collections, mongoUri, awsConfig)`
-
-Get a router for backing up `collections` from `mongoUri` to S3. Will be
-mounted to `path`. `awsConfig` is the same AWS config used in other koast
-modules.
-
