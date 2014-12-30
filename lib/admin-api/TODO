@@ -1,0 +1,5 @@
+#TODO
+
+ - Add api endpoints for pre-configured s3 buckets, integrate this into the s3 handler
+ - Add proper error handling
+ - Add auth handlers
